@@ -12,8 +12,8 @@ class Command(BaseCommand):
     help = 'Seed database'
 
     def handle(self, *args, **options):
-      self.__seed_animals()
       self.__seed_artists()
+      self.__seed_animals()
 
 
     def __seed_animals(self):
