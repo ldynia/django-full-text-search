@@ -12,7 +12,7 @@ class Command(BaseCommand):
     help = 'Seed database'
 
     def handle(self, *args, **options):
-      # self.__seed_animals()
+      self.__seed_animals()
       self.__seed_artists()
 
 
@@ -25,7 +25,7 @@ class Command(BaseCommand):
           r = requests.get(url)
           description = r.json()['query']['pages'][0]['extract']
           if r.status_code == 200 and description:
-            Animal(name=animal, wiki_url=url, description=description).save()
+            Animal(name=animal, url=url, description=description).save()
 
       print('Done saving animal  data')
 

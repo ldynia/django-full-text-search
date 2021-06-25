@@ -4,7 +4,7 @@ from django.core.validators import MaxValueValidator
 
 class Animal(models.Model):
   name = models.CharField(db_index=True, max_length=64)
-  wiki_url = models.CharField(max_length=1024)
+  url = models.CharField(max_length=1024)
   description = models.TextField()
 
 

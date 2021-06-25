@@ -12,7 +12,8 @@ $ docker exec django-demo-app python manage.py seed
 # Links
 
 * [Full Text Search](https://www.postgresql.org/docs/9.5/textsearch.html)
-* [Fuzzy Search](https://www.freecodecamp.org/news/fuzzy-string-matching-with-postgresql/)
+* [Fuzzy Search I](https://www.freecodecamp.org/news/fuzzy-string-matching-with-postgresql/)
+* [Fuzzy Search II](http://rachbelaid.com/postgres-full-text-search-is-good-enough/)
 
 # SQL
 
@@ -92,5 +93,26 @@ SELECT *, LEVENSHTEIN(name, 'Freda Kallo')
 FROM search_artist
 ORDER BY LEVENSHTEIN(name, 'Freda Kallo') ASC
 LIMIT 5;
+
+
+SELECT similarity('Something', 'something');
+
+select name, description @@ to_tsquery('tiger | fish') as res
+from search_animal
+order by res desc;
+
+```
+# Django ORM
+
+```python
+from search.models import Animal
+from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+
+Animal.objects.annotate(rank=SearchRank(SearchVector('description'), SearchQuery('stripes'))).order_by('-rank')
+Animal.objects.annotate(rank=SearchRank(SearchVector('description'), SearchQuery('tiger stripes'))).order_by('-rank')
+Animal.objects.annotate(rank=SearchRank(SearchVector('description'), SearchQuery('stripes & tiger | fish'))).order_by('-rank')
+Animal.objects.filter(description__search='tiger | fish')
+Animal.objects.filter(description__search=SearchQuery('tiger | fish'))
+
 
 ```
