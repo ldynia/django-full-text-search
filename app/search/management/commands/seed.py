@@ -1,4 +1,6 @@
+import random
 import requests
+import uuid
 
 from django.core.management.base import BaseCommand
 
@@ -12,8 +14,30 @@ class Command(BaseCommand):
     help = 'Seed database'
 
     def handle(self, *args, **options):
-      self.__seed_artists()
-      self.__seed_animals()
+        self.__seed_artists()
+        self.__seed_animals()
+        self.__seed_big_animals()
+
+
+    def __gen_animal(self, size):
+        animals = []
+        for _ in range(size):
+            animal = random.choice(COMMON_ANIMALS)
+            animal = Animal.objects.filter(name=animal).first()
+            if animal:
+                description_list = animal.description.split()
+                random.shuffle(description_list)
+                description = ' '.join(description_list)
+                animals.append(Animal(name=str(uuid.uuid4()), url=animal.url, description=description))
+        return animals
+
+    def __seed_big_animals(self):
+        BATCH_SIZE = 1000
+        MAX_RECORDS = 10000
+        for step in range(0, MAX_RECORDS, BATCH_SIZE):
+            print("Seeding", step + BATCH_SIZE, "records from", MAX_RECORDS, "records")
+            animals_batch = self.__gen_animal(BATCH_SIZE)
+            Animal.objects.bulk_create(animals_batch, BATCH_SIZE)
 
 
     def __seed_animals(self):

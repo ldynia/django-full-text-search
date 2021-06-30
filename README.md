@@ -40,10 +40,12 @@ Queries & Vectors & Ranking
 
 ```sql
 -- Query
+-- English
 SELECT to_tsquery('cats | fishes');
 SELECT to_tsquery('english', 'cats | fishes');
 SELECT to_tsquery('english', 'The & Fat & Rats | stripes');
 
+-- Danish
 SELECT to_tsquery('katten | fisken');
 SELECT to_tsquery('danish', 'katten | fisken');
 
@@ -62,13 +64,7 @@ Full Text Search
 EXPLAIN ANALYZE
 SELECT *
 FROM search_animal
-WHERE description @@ 'cat & stripes';
-
--- Slow (missed index)
-EXPLAIN ANALYZE
-SELECT *
-FROM search_animal
-WHERE to_tsvector(description) @@ to_tsquery('cat & stripes');
+WHERE to_tsvector(description) @@ to_tsquery('english', 'cat & stripes');
 
 -- Fast (hit index)
 EXPLAIN ANALYZE
@@ -80,85 +76,113 @@ WHERE to_tsvector('english', description) @@ to_tsquery('english', 'cat & stripe
 EXPLAIN ANALYZE
 SELECT *
 FROM search_animal
-WHERE description_tsv @@ to_tsquery('cat & stripes');
-
--- Fast (indexed tsvector)
-EXPLAIN ANALYZE
-SELECT *
-FROM search_animal
 WHERE description_tsv @@ to_tsquery('english', 'cat & stripes');
 ```
 
 Ranking
 
 ```sql
--- Slow (index missed)
-SELECT ts_rank_cd(to_tsvector(description), query) AS rank, *
-FROM search_animal, to_tsquery('tiger|(stripes & cat)') AS query
+-- The slowest (index missed)
+SELECT ts_rank(to_tsvector(description), query) AS rank, *
+FROM search_animal, to_tsquery('english', 'cat & stripes') AS query
 WHERE to_tsvector(description) @@ query
 ORDER BY rank DESC
 LIMIT 10;
 
--- Faster (hit index)
-SELECT ts_rank_cd(to_tsvector('english', description), query) AS rank, *
-FROM search_animal, to_tsquery('english', 'tiger|(stripes & cat)') query
+-- Slow (hit index)
+SELECT ts_rank(to_tsvector('english', description), query) AS rank, *
+FROM search_animal, to_tsquery('english', 'cat & stripes') AS query
 WHERE to_tsvector('english', description) @@ query
-ORDER BY rank DESC
-LIMIT 10;
-
--- Faster (hit index)
-SELECT ts_rank(to_tsvector('english', description) , to_tsquery('cat & stripes')) AS rank, *
-FROM search_animal
-WHERE to_tsvector('english', description) @@ to_tsquery('cat & stripes')
 ORDER BY rank DESC
 LIMIT 10;
 
 -- The Fastest (indexed tsvector)
 SELECT ts_rank(description_tsv , query) AS rank, *
 FROM search_animal, to_tsquery('cat & stripes') AS query
-WHERE description_tsv @@ to_tsquery('cat & stripes')
+WHERE description_tsv @@ query
 ORDER BY rank DESC
 LIMIT 10;
+```
 
--- The Fastest (indexed tsvector)
-SELECT ts_rank_cd(description_tsv , to_tsquery('cat & stripes')) AS rank, *
+# Experiment
+
+```sql
+--SELECT id from search_animal order by id desc limit 1;
+--SELECT pg_size_pretty (pg_total_relation_size('search_animal'));
+--DELETE FROM search_animal WHERE ID>10000;
+
+-- Slow
+SELECT *
+FROM search_animal
+WHERE description @@ to_tsquery('cat & stripes');
+
+-- Slow
+SELECT *
+FROM search_animal
+WHERE to_tsvector(description) @@ to_tsquery('cat & stripes');
+
+-- Fast
+SELECT *
+FROM search_animal
+WHERE to_tsvector('english', description) @@ to_tsquery('cat & stripes');
+
+-- Fast
+SELECT *
+FROM search_animal
+WHERE description_tsv @@ to_tsquery('cat & stripes');
+
+-- Fast
+SELECT ts_rank(description_tsv , to_tsquery('cat & stripes')) AS rank, *
 FROM search_animal
 WHERE description_tsv @@ to_tsquery('cat & stripes')
 ORDER BY rank DESC
-LIMIT 10;
+
+-- Slow
+SELECT ts_rank(to_tsvector('english', description), to_tsquery('cat & stripes')) AS rank, *
+FROM search_animal
+WHERE to_tsvector('english', description) @@ to_tsquery('cat & stripes')
+ORDER BY rank desc;
 ```
 
 # Django ORM
 
 ```python
 from search.models import Animal
-from django.db.models import F
 from django.db import connection
 from django.contrib.postgres.search import SearchQuery, SearchVector, SearchRank
 
+# Fast 0.2ms
 Animal.objects.annotate(search=SearchVector('description')).filter(search='cats')
 Animal.objects.annotate(search=SearchVector('description', config='english')).filter(search=SearchQuery('cats & stripes', config='english'))
-Animal.objects.annotate(search=SearchVector('description_tsv', config='english')).filter(search=SearchQuery('cats & stripes', config='english'))
+Animal.objects.annotate(search=SearchVector('description_tsv', config='english')).filter(search=SearchQuery('cats & stripes', config='english', search_type='raw'))
 
 # Slow
 Animal.objects.annotate(rank=SearchRank('description', SearchQuery('cat & tiger | stripes'))).order_by('-rank')
 Animal.objects.annotate(rank=SearchRank(SearchVector('description'), SearchQuery('cat & tiger | stripes'))).order_by('-rank')
 Animal.objects.annotate(rank=SearchRank(SearchVector('description', config='english'), SearchQuery('cat & stripes', config='english'))).order_by('-rank')
 
+Animal.objects.annotate(rank=SearchRank(CoalesceLessSearchVector('description', config='english'), SearchQuery('cat & stripes', config='english', search_type='raw'))).order_by('-rank')
+
+# Fast
+animals = Animal.objects.annotate(rank=SearchRank(VectorLessSearch('description_tsv'), SearchQuery('cat &
+stripes', config='english', search_type='raw'))).order_by('-rank')
+
 # Slow
 Animal.objects.annotate(rank=SearchRank('description_tsv', SearchQuery('cat & stripes', config='english'))).order_by('-rank')
-Animal.objects.annotate(rank=SearchRank(SearchVector('description_tsv'), SearchQuery('cat & stripes'))).order_by('-rank')
+Animal.objects.annotate(rank=SearchRank(SearchVector('description_tsv'), SearchQuery('cat & stripes', config='english'))).order_by('-rank')
 Animal.objects.annotate(rank=SearchRank(SearchVector('description_tsv', config='english'), SearchQuery('cat & stripes', config='english'))).order_by('-rank')
 
 # Slow
-Animal.objects.filter(description__search='stripes & cat')
-Animal.objects.filter(description__search=SearchQuery('stripes & cat'))
-Animal.objects.filter(description__search=SearchQuery('stripes & cat', config='english'))
+Animal.objects.filter(description__search='stripes | cat')
+# Fast
+Animal.objects.filter(description__search=SearchQuery('stripes | cat', search_type='raw'))
+Animal.objects.filter(description__search=SearchQuery('stripes | cat', search_type='raw',config='english'))
 
 # Fast
 Animal.objects.filter(description_tsv='cat | stripes')
-Animal.objects.filter(description_tsv=SearchQuery('cat | stripes'))
-Animal.objects.filter(description_tsv=SearchQuery('cat | stripes', config='english'))
+Animal.objects.filter(description_tsv=SearchQuery('cat | stripes', search_type='raw'))
+
+connection.queries[-1]['time']
 ```
 
 # Fuzzy Search
@@ -205,4 +229,120 @@ SELECT similarity('Something', 'something');
 select name, description @@ to_tsquery('tiger | fish') as res
 from search_animal
 order by res desc;
+```
+
+# Benchmark
+
+To run various benchmarks run
+
+```bash
+docker exec django-demo-app python manage.py benchmark
+```
+
+# Conclusions
+
+Observations from experiment indicate that, gin indexed `to_tsvector(description)` column. is as fast as indexed `description_tsv` column updated with triggers. This is true only for `@@` operator. However, applying `to_tsvector('english', description)` in `ts_rank` function is not preferment as one would expect. Because of that I arrive to the conclusion that creating a `trigger` and `tsvcolumn` is not necessary if you need ONLY use `@@` operator that searches for queries. However, is still better to have `description_tsv` of `tsvcolumn` type because it works better with `ts_rank`.
+
+To overcome limitations of auto generated queries created by Django ORM in Full Text Search I had to implement custom vectors.
+
+#### API
+
+```python
+from django.db import connection
+
+from search.models import Animal
+from search.utils import CoalesceLessSearchVector
+from search.utils import VectorLessSearch
+
+
+>>> Animal.objects.annotate(rank=SearchRank(VectorLessSearch('description_tsv'), SearchQuery('cat & stripes', config='english', search_type='raw'))).order_by('-rank')
+>>> connection.queries[-1]['time']
+>>> connection.queries[-1]['sql']
+
+>>> Animal.objects.annotate(search=CoalesceLessSearchVector('description', config='english')).filter(search=SearchQuery('cats', config='english', search_type='raw'))
+>>> connection.queries[-1]['time']
+>>> connection.queries[-1]['sql']
+
+>>> Animal.objects.filter(description__search=SearchQuery('stripes | cat', config='english', search_type='raw'))
+>>> connection.queries[-1]['time']
+>>> connection.queries[-1]['sql']
+
+
+```
+
+#### /app/search/utils.py
+
+```python
+from django.contrib.postgres.search import SearchVector
+from django.contrib.postgres.search import SearchVectorField
+
+
+class VectorLessSearch(SearchVector):
+    """
+    Vector Less Search works ONLY with column that is tsvector datatype.
+    link: https://github.com/django/django/blob/main/django/contrib/postgres/search.py
+    """
+
+    def as_sql(self, compiler, connection, function=None, template=None):
+        clone = self.copy()
+        config_sql = None
+        config_params = []
+
+        # Check if searched column is postgres tsvector datatype
+        for expression in clone.get_source_expressions():
+            if not isinstance(expression.output_field, SearchVectorField):
+                raise Exception(f"Provided field '{expression.output_field}' is not a SearchVectorField (tsvector).")
+
+        if template is None:
+            if clone.config:
+                config_sql, config_params = compiler.compile(clone.config)
+                template = '%(function)s(%(config)s, %(expressions)s)'
+            else:
+                template = clone.template
+
+        sql, params = super(SearchVector, clone).as_sql(
+            compiler, connection, function=function, template=template,
+            config=config_sql,
+        )
+
+        extra_params = []
+        if clone.weight:
+            weight_sql, extra_params = compiler.compile(clone.weight)
+            sql = 'setweight({}, {})'.format(sql, weight_sql)
+
+        # Remove postgres 'to_tsvector' function from sql string
+        sql = sql.replace('to_tsvector(', '').replace(')', '')
+
+        return sql, config_params + params + extra_params
+
+
+class CoalesceLessSearchVector(SearchVector):
+    """
+    Class removes Coalesce and Cast functions from SearchVector.
+    link: https://github.com/django/django/blob/main/django/contrib/postgres/search.py
+    """
+
+    def as_sql(self, compiler, connection, function=None, template=None):
+        clone = self.copy()
+        config_sql = None
+        config_params = []
+        if template is None:
+            if clone.config:
+                config_sql, config_params = compiler.compile(clone.config)
+                template = '%(function)s(%(config)s, %(expressions)s)'
+            else:
+                template = clone.template
+
+        sql, params = super(SearchVector, clone).as_sql(
+            compiler, connection, function=function, template=template,
+            config=config_sql,
+        )
+
+        extra_params = []
+        if clone.weight:
+            weight_sql, extra_params = compiler.compile(clone.weight)
+            sql = 'setweight({}, {})'.format(sql, weight_sql)
+
+        return sql, config_params + params + extra_params
+
 ```
