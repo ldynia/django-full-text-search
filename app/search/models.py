@@ -3,11 +3,16 @@ from django.core.validators import MaxValueValidator
 from django.contrib.postgres.search import SearchVectorField
 
 
+def defautl_meta_json():
+    return {"name": "", "description": ""}
+
+
 class Animal(models.Model):
     name = models.CharField(db_index=True, max_length=64)
     url = models.CharField(max_length=1024)
     description = models.TextField()
     description_tsv = SearchVectorField(null=True)
+    meta_json = models.JSONField(default=defautl_meta_json)
 
 
 class Artist(models.Model):

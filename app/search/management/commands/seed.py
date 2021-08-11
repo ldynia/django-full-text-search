@@ -18,19 +18,6 @@ class Command(BaseCommand):
         self.__seed_animals()
         self.__seed_big_animals()
 
-
-    def __gen_animal(self, size):
-        animals = []
-        for _ in range(size):
-            animal = random.choice(COMMON_ANIMALS)
-            animal = Animal.objects.filter(name=animal).first()
-            if animal:
-                description_list = animal.description.split()
-                random.shuffle(description_list)
-                description = ' '.join(description_list)
-                animals.append(Animal(name=str(uuid.uuid4()), url=animal.url, description=description))
-        return animals
-
     def __seed_big_animals(self):
         BATCH_SIZE = 1000
         MAX_RECORDS = 10000
@@ -38,7 +25,6 @@ class Command(BaseCommand):
             print("Seeding", step + BATCH_SIZE, "records from", MAX_RECORDS, "records")
             animals_batch = self.__gen_animal(BATCH_SIZE)
             Animal.objects.bulk_create(animals_batch, BATCH_SIZE)
-
 
     def __seed_animals(self):
       print('Start saving animal data')
@@ -49,10 +35,9 @@ class Command(BaseCommand):
           r = requests.get(url)
           description = r.json()['query']['pages'][0]['extract']
           if r.status_code == 200 and description:
-            Animal(name=animal, url=url, description=description).save()
+            Animal(name=animal, url=url, description=description, meta_json={"name": animal, "description": description}).save()
 
       print('Done saving animal  data')
-
 
     def __seed_artists(self):
       print('Start saving artist data')
@@ -69,3 +54,15 @@ class Command(BaseCommand):
           ))
         Artist.objects.bulk_create(artists)
       print('Done saving artist data')
+
+    def __gen_animal(self, size):
+        animals = []
+        for _ in range(size):
+            animal = random.choice(COMMON_ANIMALS)
+            animal = Animal.objects.filter(name=animal).first()
+            if animal:
+                description_list = animal.description.split()
+                random.shuffle(description_list)
+                description = ' '.join(description_list)
+                animals.append(Animal(name=str(uuid.uuid4()), url=animal.url, description=description))
+        return animals

@@ -6,12 +6,12 @@ services:
       dockerfile: ../docker/Dockerfile
     image: django/demo
     container_name: django-demo-app
-    hostname: django-demo-postgress
-    ports: 
+    hostname: django-demo-app
+    ports:
       - 8000:8000
-    depends_on: 
+    depends_on:
       - postgres
-    environment: 
+    environment:
       - DJANGO_SETTINGS_MODULE=config.postgres
       # - DJANGO_SETTINGS_MODULE=config.base
     volumes:
@@ -20,5 +20,5 @@ services:
     image: postgres:13.2
     container_name: django-demo-postgres
     hostname: django-demo-postgres
-    environment: 
+    environment:
       - POSTGRES_PASSWORD=postgres

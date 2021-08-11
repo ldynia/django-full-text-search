@@ -6,8 +6,9 @@ echo "Container IP: $CONTAINER_IP"
 echo "Install requirements.txt"
 pip install -r /app/requirements.txt --no-cache-dir
 
-# echo "Run migrations"
-# python /app/manage.py migrate
+echo "Run migrations"
+python /app/manage.py makemigrate
+python /app/manage.py migrate
 
 # if args empty
 if [ -z "$@" ]

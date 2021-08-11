@@ -16,6 +16,8 @@ $ docker exec django-demo-app python manage.py seed
 * [Postgres full-text search is Good Enough](http://rachbelaid.com/postgres-full-text-search-is-good-enough/)
 * [Efficient Postgres Full Text Search in Django](https://pganalyze.com/blog/full-text-search-django-postgres)
 * [How to use fuzzy string matching with Postgresql](https://www.freecodecamp.org/news/fuzzy-string-matching-with-postgresql/)
+* [Good To Know I](https://scalegrid.io/blog/using-jsonb-in-postgresql-how-to-effectively-store-index-json-data-in-postgresql/)
+* [Good To Know II](https://medium.com/hackernoon/how-to-query-jsonb-beginner-sheet-cheat-4da3aa5082a3)
 
 # Full text search
 
@@ -150,6 +152,8 @@ ORDER BY rank desc;
 from search.models import Animal
 from django.db import connection
 from django.contrib.postgres.search import SearchQuery, SearchVector, SearchRank
+from search.utils import CoalesceLessSearchVector, VectorLessSearch
+
 
 # Fast 0.2ms
 Animal.objects.annotate(search=SearchVector('description')).filter(search='cats')
@@ -345,4 +349,16 @@ class CoalesceLessSearchVector(SearchVector):
 
         return sql, config_params + params + extra_params
 
+```
+
+# JSONB
+
+
+```sql
+-- Search for name
+SELECT meta_json -> 'name' AS names FROM search_animal;
+SELECT meta_json ->> 'name' AS names FROM search_animal;
+
+SELECT * FROM search_animal WHERE meta_json ->> 'name' = 'Ape';
+SELECT * FROM search_animal WHERE meta_json ->> 'name' IN ('Ape', 'Alpaca');
 ```
